@@ -1,0 +1,10 @@
+
+# STM32CubeIDE
+Debug/
+Release/
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.d
