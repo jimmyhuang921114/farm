@@ -1,53 +1,43 @@
+"""Encode STM32 commands and decode velocity replies."""
+
 import json
+import math
 
 
-def encode_packet(command, **data):
-    packet = {
-        "cmd": command,
-        "data": data,
-    }
-
+def _encode(command, data):
     return (
-        json.dumps(
-            packet,
-            separators=(",", ":"),
-            allow_nan=False,
-        ) + "\n"
-    ).encode("utf-8")
+        json.dumps({'cmd': command, 'data': data}, allow_nan=False) + '\n'
+    ).encode('ascii')
 
 
-    
+def encode_person_position(x, y, z):
+    """Encode a person position in the robot base frame, in meters."""
+    return _encode('person_position', {'x': x, 'y': y, 'z': z})
 
-class PacketParser:  #package
-    def __init__(self): 
-        self.buffer = bytearray() # create a array for buffer the msg
-        self.max_packet_size = 1024 # max packet size of byte
 
-    def feed(self, received: bytes) -> list[dict]: # get the receiver from callback
-        self.buffer.extend(received) # extend  the receiver
-        packets = []
+def encode_person_lost():
+    """Encode a notification that the target is no longer available."""
+    return _encode('person_lost', {})
 
-        while b"\n" in self.buffer: 
-            line, _, remaining = self.buffer.partition(b"\n")
-            self.buffer = bytearray(remaining)
 
-            if not line or len(line) > self.max_packet_size:
-                continue
+def encode_stop():
+    """Encode an explicit stop command."""
+    return _encode('stop', {})
 
-            try:
-                packet = json.loads(line.decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
-                continue
 
-            if (
-                isinstance(packet, dict)
-                and isinstance(packet.get("cmd"), str)
-                and isinstance(packet.get("data"), dict)
-            ):
-                packets.append(packet)
-
-        # if the buffer longer than setting size,clear the buffer
-        if len(self.buffer) > self.max_packet_size:
-            self.buffer.clear()
-
-        return packets
+def decode_cmd_vel(line):
+    """Return finite (v, w) values from a valid STM32 reply, or None."""
+    try:
+        packet = json.loads(line)
+        if not isinstance(packet, dict) or packet.get('cmd') != 'cmd_vel':
+            return None
+        data = packet.get('data')
+        if not isinstance(data, dict):
+            return None
+        v, w = data.get('v'), data.get('w')
+        if all(type(value) in (int, float) and math.isfinite(value)
+               for value in (v, w)):
+            return float(v), float(w)
+    except (ValueError, OverflowError):
+        pass
+    return None

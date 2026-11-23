@@ -14,7 +14,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='jimmy',
-    maintainer_email='jimmy@todo.todo',
+    maintainer_email='jimmyjimmyhuang1114@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
     extras_require={
@@ -24,8 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            "send_uart = bridge.send_uart:main",
-            "tf_cube_extractor = bridge.tf_cube_extractor:main"
+            'target_bridge = bridge.target_bridge:main',
         ],
     },
 )
