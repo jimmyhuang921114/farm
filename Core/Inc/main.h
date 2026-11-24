@@ -115,8 +115,12 @@ void Error_Handler(void);
  * GIMBAL_PIVOT_X_M/GIMBAL_PIVOT_Y_M in the robot base frame.
  * I2C1 reads the AS5600; TIM4 CH1–CH3 and PD11 drive the gimbal.
  */
+#define GIMBAL_YAW_ZERO_RAW 3076
+#define GIMBAL_YAW_SIGN 1.0f
+#define GIMBAL_PIVOT_X_M 0.0f
+#define GIMBAL_PIVOT_Y_M 0.0f
 #ifndef GIMBAL_ENABLED
-#define GIMBAL_ENABLED 0
+#define GIMBAL_ENABLED 1
 #endif
 
 /* USER CODE END Private defines */

@@ -44,6 +44,7 @@ static float zero_electric_angle;
 static float target_angle;
 
 static bool yaw_zero_valid;
+static bool alignment_in_progress;
 static uint16_t yaw_zero_raw;
 static float yaw_zero_control_angle;
 
@@ -160,7 +161,7 @@ static MotorResult read_encoder(void)
     if (AS5600_ReadSample(&encoder) != HAL_OK)
         return stop_with_fault(MOTOR_ERR_ENCODER);
 
-    if (yaw_out_of_range())
+    if (!alignment_in_progress && yaw_out_of_range())
         return stop_with_fault(MOTOR_ERR_YAW_LIMIT);
 
     return MOTOR_OK;
@@ -271,14 +272,20 @@ MotorResult Motor_Start(TIM_HandleTypeDef *pwm_timer)
     HAL_GPIO_WritePin(Driver_Enable_GPIO_Port, Driver_Enable_Pin, GPIO_PIN_SET);
     enabled = true;
 
+    alignment_in_progress = true;
     result = align_sensor();
+    alignment_in_progress = false;
     if (result != MOTOR_OK)
         return result;
 
     target_angle = control_angle();
 
     if (yaw_zero_valid)
+    {
         update_yaw_reference();
+        if (yaw_out_of_range())
+            return stop_with_fault(MOTOR_ERR_YAW_LIMIT);
+    }
 
     reset_controllers();
     return MOTOR_OK;

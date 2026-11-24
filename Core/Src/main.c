@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "string.h"
+#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -128,6 +129,11 @@ int main(void)
   Track_Init();
 #if GIMBAL_ENABLED
   GimbalTrack_Init(&hi2c1, &htim4);
+  char gimbal_status[96];
+  snprintf(gimbal_status, sizeof(gimbal_status),
+           "{\"gimbal_status\":\"%s\"}\r\n",
+           GimbalTrack_GetStatus());
+  UART_Sender_Send(gimbal_status);
 #endif
   if (UART_Receiver_Start(&huart3) != HAL_OK)
   {
