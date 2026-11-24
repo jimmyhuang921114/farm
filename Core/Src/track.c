@@ -2,22 +2,21 @@
 #include <math.h>
 #include <string.h>
 
-/*
- * Simple 2D person follower for differential drive.
- * It is NOT the full Nav2 Regulated Pure Pursuit path-following controller:
- * there is no planned path, obstacle checking, or localization here.
- *
- * Sample defaults are placeholders; confirm Carter's geometry and limits.
- * Coordinate frame: robot +X forward, +Y left, +Z up; units are meters.
- * IMPORTANT: call Track_Update() at a stable rate and continuously refresh
- * Track_SetPosition() when new target measurements arrive.
- */
+// Simple 2D person follower for differential drive.
+// It is NOT the full Nav2 Regulated Pure Pursuit path-following controller:
+// there is no planned path, obstacle checking, or localization here.
+//
+// Sample defaults are placeholders; confirm Carter's geometry and limits.
+// Coordinate frame: robot +X forward, +Y left, +Z up; units are meters.
+// IMPORTANT: call Track_Update() at a stable rate and continuously refresh
+// Track_SetPosition() when new target measurements arrive.
 
 #define TRACK_PI 3.14159265358979323846f
 
+// 人物追蹤的預設參數，車輪尺寸與輪距須依實車量測。
 static const TrackConfig k_default_config = {
-    .wheel_radius_m = 0.10f,             /* PLACEHOLDER, NOT verified Carter data */
-    .wheel_base_m = 0.40f,               /* PLACEHOLDER, NOT verified Carter data */
+    .wheel_radius_m = 0.10f,             // PLACEHOLDER, NOT verified Carter data
+    .wheel_base_m = 0.40f,               // PLACEHOLDER, NOT verified Carter data
     .follow_distance_m = 1.20f,
     .stop_tolerance_m = 0.15f,
     .hard_stop_distance_m = 0.50f,
@@ -33,12 +32,14 @@ static const TrackConfig k_default_config = {
     .target_timeout_s = 0.30f
 };
 
+// 保存控制參數、最近人物座標、車體輸出及目標經過時間。
 static TrackConfig config;
 static TrackPosition target;
 static TrackCommand command;
 static float target_age_s = 0.0f;
 static bool initialized = false;
 
+// 將控制量限制在上下界內。
 static float clampf_local(float value, float min_value, float max_value)
 {
     if (value < min_value) { return min_value; }
@@ -46,11 +47,13 @@ static float clampf_local(float value, float min_value, float max_value)
     return value;
 }
 
+// 依每輪允許的變化量讓速度逐步接近目標。
 static float approachf_local(float current, float desired, float max_step)
 {
     return current + clampf_local(desired - current, -max_step, max_step);
 }
 
+// 首次呼叫時載入預設值，並清除目標與速度。
 static void ensure_initialized(void)
 {
     if (!initialized)
@@ -64,12 +67,14 @@ static void ensure_initialized(void)
     }
 }
 
+// 將速度和車輪命令歸零，並記錄停止原因。
 static void stop_command(TrackState state)
 {
     command = (TrackCommand){0};
     command.state = state;
 }
 
+// 檢查參數有限且相互一致，避免無效除法或限幅。
 static bool config_valid(const TrackConfig *cfg)
 {
     if (cfg == NULL) { return false; }
@@ -107,6 +112,7 @@ static bool config_valid(const TrackConfig *cfg)
            cfg->target_timeout_s > 0.0f;
 }
 
+// 開機時建立車體追蹤的初始狀態。
 void Track_Init(void)
 {
     config = k_default_config;
@@ -117,6 +123,7 @@ void Track_Init(void)
     initialized = true;
 }
 
+// 接收新人物座標並重設逾時計時，座標以車體為原點，單位為公尺。
 bool Track_SetPosition(float x, float y, float z)
 {
     ensure_initialized();
@@ -134,12 +141,14 @@ bool Track_SetPosition(float x, float y, float z)
     return true;
 }
 
+// 回傳最近的目標座標與有效旗標。
 TrackPosition Track_GetPosition(void)
 {
     ensure_initialized();
     return target;
 }
 
+// 清除目標並立即撤銷車體速度命令。
 void Track_Clear(void)
 {
     ensure_initialized();
@@ -148,26 +157,29 @@ void Track_Clear(void)
     stop_command(TRACK_STATE_NO_TARGET);
 }
 
+// 回傳目前生效的車體追蹤參數。
 TrackConfig Track_GetConfig(void)
 {
     ensure_initialized();
     return config;
 }
 
+// 驗證後更新參數，並清除依舊參數算出的速度。
 bool Track_SetConfig(const TrackConfig *new_config)
 {
     ensure_initialized();
     if (!config_valid(new_config)) { return false; }
     config = *new_config;
-    stop_command(TRACK_STATE_NO_TARGET); /* Never retain output from old limits */
+    stop_command(TRACK_STATE_NO_TARGET); // Never retain output from old limits
     return true;
 }
 
+// 依實際經過秒數檢查目標逾時，並更新差速車的速度。
 void Track_Update(float dt_s)
 {
     ensure_initialized();
 
-    /* Bad update timing: fail safe instead of integrating arbitrary timing. */
+    // Bad update timing: fail safe instead of integrating arbitrary timing.
     if (!isfinite(dt_s) || dt_s <= 0.0f || dt_s > 0.10f)
     {
         Track_Clear();
@@ -198,7 +210,7 @@ void Track_Update(float dt_s)
         return;
     }
 
-    /* X,Y in meters in a robot-centric plane; curvature positive = left. */
+    // X,Y in meters in a robot-centric plane; curvature positive = left.
     float curvature = 0.0f;
     if (distance > 0.001f)
     {
@@ -216,7 +228,7 @@ void Track_Update(float dt_s)
     {
         state = TRACK_STATE_TOO_CLOSE;
         immediate_linear_stop = true;
-        desired_w = 0.0f;   /* Do not rotate while inside hard-stop zone */
+        desired_w = 0.0f;   // Do not rotate while inside hard-stop zone
     }
     else if (abs_angle >= config.turn_in_place_angle_rad)
     {
@@ -255,9 +267,9 @@ void Track_Update(float dt_s)
         state = TRACK_STATE_FOLLOWING;
         desired_v = config.distance_kp * distance_error;
         desired_v = clampf_local(desired_v, 0.0f, config.max_linear_speed_mps);
-        /* Slow translation during steering, never reverse toward target. */
+        // Slow translation during steering, never reverse toward target.
         desired_v *= cosf(angle);
-        /* Curvature pursuit + heading correction (point target, no path). */
+        // Curvature pursuit + heading correction (point target, no path).
         desired_w = desired_v * curvature;
         if (abs_angle > config.heading_deadband_rad)
         {
@@ -278,13 +290,13 @@ void Track_Update(float dt_s)
               : approachf_local(command.angular_vel, desired_w,
                                 config.max_angular_accel_radps2 * dt_s);
 
-    /* Differential-drive inverse kinematics; wheel outputs in rad/s. */
+    // Differential-drive inverse kinematics; wheel outputs in rad/s.
     float left = (v - (w * config.wheel_base_m * 0.5f)) / config.wheel_radius_m;
     float right = (v + (w * config.wheel_base_m * 0.5f)) / config.wheel_radius_m;
     float largest = fmaxf(fabsf(left), fabsf(right));
     if (largest > config.max_wheel_speed_radps)
     {
-        /* Preserve turning radius by scaling BOTH chassis command values. */
+        // Preserve turning radius by scaling BOTH chassis command values.
         float scale = config.max_wheel_speed_radps / largest;
         v *= scale;
         w *= scale;
@@ -303,6 +315,7 @@ void Track_Update(float dt_s)
     command.state = state;
 }
 
+// 回傳最近一輪算出的車體與車輪速度。
 TrackCommand Track_GetCommand(void)
 {
     ensure_initialized();

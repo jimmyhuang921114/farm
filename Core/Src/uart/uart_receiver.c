@@ -1,9 +1,11 @@
 #include "uart_receiver.h"
 #include "protocol.h"
 
+// 環形緩衝區保存中斷收到的位元組，行緩衝區保存待解析的一行。
 #define RX_BUFFER_SIZE 512U
 #define LINE_BUFFER_SIZE 256U
 
+// 保存接收介面、單位元組中斷緩衝及一筆待主程式取走的指令。
 static UART_HandleTypeDef *uart_handle = NULL;
 
 static uint8_t rx_byte;
@@ -12,18 +14,19 @@ static bool command_ready = false;
 
 
 
-/* 中斷寫入，主迴圈讀取 */
+// 中斷寫入，主迴圈讀取
 static volatile uint8_t rx_buffer[RX_BUFFER_SIZE];
 static volatile uint16_t rx_head = 0;
 static volatile uint16_t rx_tail = 0;
 static volatile uint8_t rx_overflow = 0;
 
-/* 僅由主迴圈使用 */
+// 僅由主迴圈使用
 static char line_buffer[LINE_BUFFER_SIZE];
 static uint16_t line_length = 0;
 static uint8_t discard_line = 0;
 
 
+// 清除接收狀態並啟動第一個位元組的中斷接收。
 HAL_StatusTypeDef UART_Receiver_Start(UART_HandleTypeDef *huart)
 {
     if (huart == NULL)
@@ -47,6 +50,7 @@ HAL_StatusTypeDef UART_Receiver_Start(UART_HandleTypeDef *huart)
 }
 
 
+// 將中斷讀到的位元組排入環形緩衝區，接著重新啟動接收。
 void UART_Receiver_RxCallback(UART_HandleTypeDef *huart)
 {
     if (uart_handle == NULL || huart != uart_handle)
@@ -65,7 +69,7 @@ void UART_Receiver_RxCallback(UART_HandleTypeDef *huart)
         rx_overflow = 1;
     }
 
-    /* 接收完一個 byte 後，重新啟動接收 */
+    // 接收完一個 byte 後，重新啟動接收
     HAL_UART_Receive_IT(
         uart_handle,
         &rx_byte,
@@ -74,6 +78,7 @@ void UART_Receiver_RxCallback(UART_HandleTypeDef *huart)
 }
 
 
+// 標記資料可能不完整，並在 UART 可接收時重新掛上中斷。
 void UART_Receiver_ErrorCallback(UART_HandleTypeDef *huart)
 {
     if (huart != uart_handle || uart_handle == NULL)
@@ -85,13 +90,14 @@ void UART_Receiver_ErrorCallback(UART_HandleTypeDef *huart)
 }
 
 
+// 解析完整指令行，解析失敗時交由主程式執行停止。
 static void Handle_Line(const char *line)
 {
     RobotCommand command;
 
     if (!Protocol_Parse(line, &command))
     {
-        /* 收到無效封包，交給主程式執行停止 */
+        // 收到無效封包，交給主程式執行停止
         command = (RobotCommand){0};
         command.type = COMMAND_STOP;
     }
@@ -102,12 +108,11 @@ static void Handle_Line(const char *line)
 
 
 
+// 在主迴圈組合指令行，遇到緩衝區溢位時重新找下一個換行。
 void UART_Receiver_Process(void)
 {
-    /*
-     * 若環形緩衝區溢位，清除不完整資料，
-     * 並等待下一個換行重新同步。
-     */
+    // 若環形緩衝區溢位，清除不完整資料，
+    // 並等待下一個換行重新同步。
     if (command_ready)
         return;
 
@@ -138,7 +143,7 @@ void UART_Receiver_Process(void)
         rx_tail =
             (uint16_t)((rx_tail + 1U) % RX_BUFFER_SIZE);
 
-        /* 換行代表一個完整封包結束 */
+        // 換行代表一個完整封包結束
         if (byte == '\n')
         {
             if (!discard_line && line_length > 0)
@@ -152,12 +157,12 @@ void UART_Receiver_Process(void)
         }
         else if (discard_line)
         {
-            /* 丟棄異常封包，直到收到換行 */
+            // 丟棄異常封包，直到收到換行
             continue;
         }
         else if (byte == '\r')
         {
-            /* 同時相容 \n 與 \r\n */
+            // 同時相容 \n 與 \r\n
             continue;
         }
         else if (byte == '\0')
@@ -171,7 +176,7 @@ void UART_Receiver_Process(void)
         }
         else
         {
-            /* 封包太長，整包丟棄 */
+            // 封包太長，整包丟棄
             line_length = 0;
             discard_line = 1;
         }
@@ -179,6 +184,7 @@ void UART_Receiver_Process(void)
 }
 
 
+// 取走一筆已解析指令並釋放待取位置。
 bool UART_Receiver_TakeCommand(RobotCommand *command)
 {
     if (command == NULL || !command_ready)

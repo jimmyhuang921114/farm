@@ -1,20 +1,18 @@
 /* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+// *****************************************************************************
+// @file           : main.c
+// @brief          : Main program body
+// *****************************************************************************
+// @attention
+//
+// Copyright (c) 2026 STMicroelectronics.
+// All rights reserved.
+//
+// This software is licensed under terms that can be found in the LICENSE file
+// in the root directory of this software component.
+// If no LICENSE file comes with this software, it is provided AS-IS.
+//
+// *****************************************************************************
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -127,6 +125,14 @@ int main(void)
   /* USER CODE BEGIN 2 */
   UART_Sender_Init(&huart3);
   Track_Init();
+  // 先開啟 UART 接收中斷，對齊期間收到的資料可進入接收緩衝區。
+  if (UART_Receiver_Start(&huart3) != HAL_OK)
+  {
+#if GIMBAL_ENABLED
+    GimbalTrack_Stop();
+#endif
+    Error_Handler();
+  }
 #if GIMBAL_ENABLED
   GimbalTrack_Init(&hi2c1, &htim4);
   char gimbal_status[96];
@@ -135,13 +141,6 @@ int main(void)
            GimbalTrack_GetStatus());
   UART_Sender_Send(gimbal_status);
 #endif
-  if (UART_Receiver_Start(&huart3) != HAL_OK)
-  {
-#if GIMBAL_ENABLED
-    GimbalTrack_Stop();
-#endif
-    Error_Handler();
-  }
   uint32_t last_track_ms = HAL_GetTick();
 
   /* USER CODE END 2 */
@@ -161,7 +160,20 @@ int main(void)
       if (command.type == COMMAND_PERSON_POSITION)
       {
         Track_SetPosition(command.person.x, command.person.y, command.person.z);
+#if GIMBAL_ENABLED
+        // 只在收到新人物座標時更新追蹤目標，避免舊座標覆蓋手動指令。
+        GimbalTrack_SetPerson(Track_GetPosition());
+#endif
       }
+#if GIMBAL_ENABLED
+      else if (command.type == COMMAND_GIMBAL_RELATIVE ||
+               command.type == COMMAND_GIMBAL_ZERO ||
+               command.type == COMMAND_GIMBAL_YAW_QUERY)
+      {
+        // 雲台純文字指令交給雲台模組處理，不更新車體目標。
+        GimbalTrack_HandleCommand(&command);
+      }
+#endif
       else
       {
         Track_Clear();
@@ -182,7 +194,9 @@ int main(void)
       Track_Update(elapsed / 1000.0f);
 
 #if GIMBAL_ENABLED
-      GimbalTrack_SetPerson(Track_GetPosition());
+      TrackPosition person = Track_GetPosition();
+      if (!person.valid)
+        GimbalTrack_SetPerson(person);
 #endif
 
       TrackCommand velocity = Track_GetCommand();
@@ -689,7 +703,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
+  // User can add his own implementation to report the HAL error return state
   __disable_irq();
   while (1)
   {
@@ -708,8 +722,8 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  // User can add his own implementation to report the file name and line number,
+  // ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

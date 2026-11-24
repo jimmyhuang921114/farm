@@ -1,21 +1,19 @@
 /* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.h
-  * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+// *****************************************************************************
+// @file           : main.h
+// @brief          : Header for main.c file.
+//                   This file contains the common defines of the application.
+// *****************************************************************************
+// @attention
+//
+// Copyright (c) 2026 STMicroelectronics.
+// All rights reserved.
+//
+// This software is licensed under terms that can be found in the LICENSE file
+// in the root directory of this software component.
+// If no LICENSE file comes with this software, it is provided AS-IS.
+//
+// *****************************************************************************
 /* USER CODE END Header */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
@@ -109,16 +107,18 @@ void Error_Handler(void);
 #define LD2_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-/*
- * Enable after measuring GIMBAL_YAW_ZERO_RAW (encoder facing forward),
- * GIMBAL_YAW_SIGN (+1 if raw increases turning left, else -1), and
- * GIMBAL_PIVOT_X_M/GIMBAL_PIVOT_Y_M in the robot base frame.
- * I2C1 reads the AS5600; TIM4 CH1–CH3 and PD11 drive the gimbal.
- */
-#define GIMBAL_YAW_ZERO_RAW 3076
+// Enable after measuring GIMBAL_YAW_ZERO_RAW (encoder facing forward),
+// GIMBAL_YAW_SIGN (+1 if raw increases turning left, else -1), and
+// GIMBAL_PIVOT_X_M/GIMBAL_PIVOT_Y_M in the robot base frame.
+// I2C1 reads the AS5600; TIM4 CH1–CH3 and PD11 drive the gimbal.
+// 機械正前方實測原始計數，範圍 0 到 4095。
+#define GIMBAL_YAW_ZERO_RAW 1937
+// 若雲台向左轉時原始計數增加，使用 +1，反向則使用 -1。
 #define GIMBAL_YAW_SIGN 1.0f
+// 雲台轉軸在車體座標中的位置，X 向前、Y 向左，單位為公尺。
 #define GIMBAL_PIVOT_X_M 0.0f
 #define GIMBAL_PIVOT_Y_M 0.0f
+// 預設啟用雲台，可由編譯設定覆寫。
 #ifndef GIMBAL_ENABLED
 #define GIMBAL_ENABLED 1
 #endif
